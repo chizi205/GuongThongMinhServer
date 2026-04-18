@@ -75,11 +75,6 @@ const exportExcelService = async (planId) => {
   const totalCols = 4 + 10 + 6 + numProducts + 1;
   const lastColLetter = getColLetter(totalCols); 
 
-  // --- BƯỚC 2: THIẾT LẬP HEADER TRÊN CÙNG ---
-  sheet.mergeCells(`A1:${lastColLetter}1`);
-  sheet.getCell('A1').value = 'TỔNG CÔNG TY CP MAY NHÀ BÈ';
-  sheet.getCell('A1').font = { bold: true, size: 11 };
-
   sheet.mergeCells(`A3:${lastColLetter}3`);
   sheet.getCell('A3').value = 'BẢNG ĐO THÔNG SỐ ĐỒNG PHỤC';
   sheet.getCell('A3').alignment = { horizontal: 'center' };

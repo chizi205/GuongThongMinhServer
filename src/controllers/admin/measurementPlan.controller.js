@@ -15,7 +15,6 @@ const createPlan = async (req, res, next) => {
 const getPlans = async (req, res, next) => {
   try {
     const { shop_id, keyword } = req.query;
-    console.log(req.query)
     const result = await measurementPlanService.getPlansService(shop_id, keyword);
     res.status(200).json({ success: true, data: result });
   } catch (error) {

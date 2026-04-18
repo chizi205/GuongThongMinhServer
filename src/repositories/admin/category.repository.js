@@ -46,15 +46,26 @@ const countProductsByCategory = async (categoryId) => {
   return parseInt(result.rows[0].count, 10);
 };
 
-const getAllCategories = async () => {
-  const sql = `
-    SELECT c.*, s.name as shop_name 
+const getAllCategories = async (search = "") => {
+  let sql = `
+    SELECT c.*, s.name as shop_name,
+           -- Thêm subquery lấy size_ids nếu bạn muốn hiện tag ngay ở bảng ngoài
+           (SELECT ARRAY_AGG(size_id) FROM category_sizes WHERE category_id = c.id) as size_ids
     FROM product_categories c
     LEFT JOIN shops s ON c.shop_id = s.id
     WHERE c.is_deleted = false 
-    ORDER BY c.created_at DESC
   `;
-  const result = await pool.query(sql);
+  
+  const params = [];
+  
+  if (search) {
+    sql += ` AND c.name ILIKE $1`; // ILIKE giúp tìm kiếm không phân biệt hoa thường
+    params.push(`%${search}%`);    // Tìm kiếm dạng chứa chuỗi (contains)
+  }
+
+  sql += ` ORDER BY c.created_at DESC`;
+
+  const result = await pool.query(sql, params);
   return result.rows;
 };
 

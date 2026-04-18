@@ -13,10 +13,24 @@ exports.getAllSizes = async (req, res) => {
 
 exports.getCategories = async (req, res) => {
   try {
-    const data = await CategoryService.getAllCategories();
+    const { search } = req.query;
+    const data = await CategoryService.getAllCategories(search);
     res.status(200).json({ success: true, data });
   } catch (e) {
     res.status(500).json({ success: false, message: "Lỗi tải danh mục" });
+  }
+};
+
+
+exports.getCategorySizes = async (req, res) => {
+  try {
+    const data = await CategoryService.getSizesByCategoryId(req.params.id);
+    res.status(200).json({ success: true, data });
+  } catch (e) {
+    res.status(500).json({ 
+      success: false, 
+      message: "Lỗi tải danh sách size của danh mục" 
+    });
   }
 };
 

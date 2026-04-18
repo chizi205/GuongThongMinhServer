@@ -4,7 +4,6 @@ const UserRepository = require("../../repositories/user/info.repo");
 
 const ZALO_API = "https://openapi.zalo.me/v3.0/oa";
 
-
 class ZaloAuthService {
   static async refreshToken(shopId) {
     const tokenInfo = await ShopRepository.getTokenInfo(shopId);
@@ -120,7 +119,6 @@ class ZaloService {
                 method: "POST",
                 url: "https://openapi.zalo.me/v3.0/oa/message/cs",
                 data: {
-                    // 2. QUAN TRỌNG: Truyền zaloUserId (dãy số) vào đây
                     recipient: { user_id: zaloUserId }, 
                     message: {
                         attachment: {
@@ -137,12 +135,26 @@ class ZaloService {
         });
 
         const results = await Promise.all(promises);
+        
+        // =========================================================================
+        // ĐOẠN SỬA MỚI: KIỂM TRA LỖI TỪ DATA TRẢ VỀ CỦA TỪNG ẢNH
+        // =========================================================================
+        for (const result of results) {
+            if (result.error && result.error !== 0) {
+                console.error("Zalo API từ chối gửi Image:", result);
+                if (result.error === -213 || result.error === -139) throw new Error("QUÁ_24H");
+                if (result.error === -212 || result.error === -214) throw new Error("CHƯA_QUAN_TÂM_OA");
+                throw new Error(`Zalo API Error (${result.error}): ${result.message}`);
+            }
+        }
+
         return results;
     } catch (err) {
         console.error("Zalo sendImages error:", err.message);
         throw err;
     }
-}
+  }
+
   static async sendText(shopId, userId, text) {
     try {
       const zaloUserId = await UserRepository.getZaloUserId(shopId, userId);
@@ -159,10 +171,21 @@ class ZaloService {
         },
       });
 
-      return res.data;
+      // =========================================================================
+      // ĐOẠN SỬA MỚI: KIỂM TRA LỖI TỪ DATA TRẢ VỀ CỦA TIN NHẮN TEXT
+      // =========================================================================
+      const data = res.data;
+      if (data.error && data.error !== 0) {
+          console.error("Zalo API từ chối gửi Text:", data);
+          if (data.error === -213 || data.error === -139) throw new Error("QUÁ_24H");
+          if (data.error === -212 || data.error === -214) throw new Error("CHƯA_QUAN_TÂM_OA");
+          throw new Error(`Zalo API Error (${data.error}): ${data.message}`);
+      }
+
+      return data;
     } catch (err) {
-      console.error("Zalo sendText error:", err.response?.data || err.message);
-      throw err.response?.data || err.message;
+      console.error("Zalo sendText error:", err.message);
+      throw err; // Ném thẳng err object ra ngoài
     }
   }
 }

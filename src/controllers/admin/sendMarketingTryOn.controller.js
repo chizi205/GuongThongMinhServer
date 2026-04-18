@@ -76,19 +76,20 @@ const sendMarketingTryOn = async (req, res) => {
       const userImage = await getLatestUserImage(userId, shopId);
       if (!userImage) {
         console.log(`\x1b[31m[!] User ${userId} chưa có ảnh gốc (image_url) trong shop_users, bỏ qua!\x1b[0m`);
-        finalReport.push({ userId, status: "FAILED", reason: "Không tìm thấy ảnh gốc trong shop_users" });
+        // BÁO LỖI 1: KHÔNG CÓ ẢNH TRONG DB
+        finalReport.push({ userId, status: "FAILED", reason: "Khách hàng chưa có ảnh toàn thân" });
         continue; 
       }
 
       // =========================================================================
-      // BƯỚC MỚI: TUNG TIN NHẮN MỒI CHECK ZALO (TRÁNH LÃNG PHÍ TIỀN GỌI AI)
+      // TUNG TIN NHẮN MỒI CHECK ZALO (TRÁNH LÃNG PHÍ TIỀN GỌI AI)
       // =========================================================================
       try {
         console.log(`  -> Gửi tin nhắn mồi check trạng thái Zalo (24h/Follow)...`);
         await ZaloService.sendText(
             shopId, 
-            userId,
-"Hệ thống Gương Thông Minh gợi ý các sản phẩm này rất hợp với bạn. Hãy ghé cửa hàng để trải nghiệm nhé!"
+            userId, 
+            "Hệ thống Gương Thông Minh gợi ý các sản phẩm này rất hợp với bạn. Hãy ghé cửa hàng để trải nghiệm nhé!"
         );
       } catch (zaloErr) {
         console.log(`\x1b[31m[!] Zalo chặn gửi tin. Dừng gọi AI cho khách này để tiết kiệm!\x1b[0m`);
@@ -114,12 +115,14 @@ const sendMarketingTryOn = async (req, res) => {
         }
 
         finalReport.push({ userId, status: "ZALO_FAILED", reason: errorReason });
-        continue; // Lệnh này bỏ qua khách hàng hiện tại, KHÔNG chạy xuống gọi AI nữa
+        continue; 
       }
       // =========================================================================
 
-      // NẾU CODE CHẠY XUỐNG ĐÂY TỨC LÀ ZALO MỞ -> AN TÂM GỌI AI
       const listGeneratedImageUrls = [];
+      let missingProductImageCount = 0;
+      let aiErrorCount = 0;
+      let isUserImage404 = false;
 
       // VÒNG LẶP 2: Chạy từng sản phẩm cho user hiện tại
       for (const productId of productIds) {
@@ -127,6 +130,7 @@ const sendMarketingTryOn = async (req, res) => {
           const productImage = await getProductImage(productId);
           if (!productImage) {
             console.log(`[!] Sản phẩm ${productId} không có ảnh, bỏ qua.`);
+            missingProductImageCount++; // Tăng biến đếm SP lỗi ảnh
             continue;
           }
 
@@ -145,10 +149,28 @@ const sendMarketingTryOn = async (req, res) => {
               listGeneratedImageUrls.push(uploadRes.secure_url);
               console.log(`  [OK] Đã tạo ảnh: ${uploadRes.secure_url}`);
             }
-}
+          }
         } catch (err) {
           console.error(`\x1b[31m  [!] Lỗi Fitroom tại SP ${productId}:\x1b[0m`, err.message);
+          
+          // BÁO LỖI 2: KHÁCH CÓ ẢNH NHƯNG FILE ẢNH BỊ XÓA (LỖI 404)
+          if (err.message && err.message.includes("404")) {
+             isUserImage404 = true;
+             break; // Thoát vòng lặp sản phẩm ngay lập tức
+          }
+          aiErrorCount++;
         }
+      }
+
+      // Xử lý báo lỗi file ảnh bị mất ra Frontend
+      if (isUserImage404) {
+        console.log(`\x1b[31m  [!] Ảnh toàn thân của khách bị lỗi 404.\x1b[0m`);
+        finalReport.push({ 
+          userId, 
+          status: "FAILED", 
+          reason: "Khách hàng chưa chụp ảnh toàn thân (hoặc file ảnh gốc bị mất)" 
+        });
+        continue; // Bỏ qua khâu gửi ảnh Zalo
       }
 
       // VÒNG LẶP 3: Gửi ảnh AI sinh ra qua Zalo
@@ -157,15 +179,23 @@ const sendMarketingTryOn = async (req, res) => {
           console.log(`\x1b[32m>>> [Zalo] Đang gửi ${listGeneratedImageUrls.length} ảnh cho ${userId}...\x1b[0m`);
           
           await ZaloService.sendImages(shopId, userId, listGeneratedImageUrls);
-          await ZaloService.sendText(shopId, userId, "Ta-da! 🎉 Đây là kết quả gợi ý. Hãy ghé cửa hàng để trải nghiệm nhé!");
           
           finalReport.push({ userId, status: "SUCCESS", imagesSent: listGeneratedImageUrls.length });
         } catch (zaloErr) {
           console.error(`\x1b[31m>>> [Zalo] Thất bại lúc gửi ảnh:\x1b[0m`, zaloErr.message || zaloErr);
-          finalReport.push({ userId, status: "ZALO_FAILED", reason: "Lỗi gửi ảnh (Dù tin nhắn mồi đã thành công)" });
+          finalReport.push({ userId, status: "ZALO_FAILED", reason: "Lỗi gửi ảnh qua Zalo (Dù tin nhắn mồi đã gửi được)" });
         }
       } else {
-        finalReport.push({ userId, status: "FAILED", reason: "Tất cả sản phẩm đều ghép lỗi AI" });
+        // BÁO LỖI 3: THIẾU ẢNH SẢN PHẨM HOẶC LỖI AI
+        let failReason = "Tất cả sản phẩm đều ghép lỗi AI";
+        
+        if (missingProductImageCount === productIds.length) {
+            failReason = "Tất cả sản phẩm được chọn đều thiếu ảnh mẫu";
+        } else if (missingProductImageCount > 0 || aiErrorCount > 0) {
+            failReason = `Thất bại: ${missingProductImageCount} SP thiếu ảnh, ${aiErrorCount} SP lỗi AI`;
+        }
+
+        finalReport.push({ userId, status: "FAILED", reason: failReason });
       }
     }
 

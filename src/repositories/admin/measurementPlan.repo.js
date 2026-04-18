@@ -79,7 +79,7 @@ const getPlanDataForExport = async (planId) => {
       pd.id AS plan_detail_id,
       u.full_name,
       u.gender,
-      -- Pivot thông số từ DB (Đã bổ sung đầy đủ các trường mới và tương thích mã code)
+      -- Pivot thông số từ DB
       MAX(CASE WHEN cmp.code IN ('rong_vai', 'vai') THEN pdm.measured_value END) as m_vai,
       MAX(CASE WHEN cmp.code = 'dai_tay' THEN pdm.measured_value END) as m_dai_tay,
       MAX(CASE WHEN cmp.code = 'dai_ao' THEN pdm.measured_value END) as m_dai_ao,
@@ -98,8 +98,8 @@ const getPlanDataForExport = async (planId) => {
       MAX(CASE WHEN cmp.code = 'ong' THEN pdm.measured_value END) as m_ong,
       MAX(CASE WHEN cmp.code = 'ly' THEN pdm.measured_value END) as m_ly,
       
-      -- Gộp Tên Sản Phẩm và Size thành chuỗi để xử lý cột động trên server
-      STRING_AGG(DISTINCT p.name || '::' || COALESCE(s.name, ''), '||') as products_data,
+      -- SỬA TẠI ĐÂY: Sử dụng pc.name thay vì p.name để hiển thị theo danh mục
+      STRING_AGG(DISTINCT pc.name || '::' || COALESCE(s.name, ''), '||') as products_data,
       
       pd.note
     FROM plan_details pd
@@ -109,12 +109,12 @@ const getPlanDataForExport = async (planId) => {
     LEFT JOIN plan_detail_products pdp ON pd.id = pdp.plan_detail_id
     LEFT JOIN products p ON pdp.product_id = p.id
     LEFT JOIN product_categories pc ON p.category_id = pc.id
-    LEFT JOIN category_sizes cs ON pc.id = cs.category_id
-    LEFT JOIN sizes s ON cs.size_id = s.id
+    LEFT JOIN sizes s ON pdp.selected_size_id = s.id
     WHERE pd.plan_id = $1 AND pd.is_deleted = false
     GROUP BY pd.id, u.full_name, u.gender, pd.note
     ORDER BY u.full_name ASC;
   `;
+  
   const { rows } = await db.query(query, [planId]);
 
   const shopQuery = `
@@ -125,5 +125,4 @@ const getPlanDataForExport = async (planId) => {
 
   return { shopName: shopRes.rows[0]?.shop_name || "", details: rows };
 }
-
 module.exports = { createMeasurementPlan, getPlans, updatePlan, deletePlan, getPlanDataForExport };

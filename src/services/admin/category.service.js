@@ -2,7 +2,9 @@ const CategoryRepo = require("../../repositories/admin/category.repository");
 
 
 const getAllSizes = async () => await CategoryRepo.getAllSizes();
-const getAllCategories = async () => await CategoryRepo.getAllCategories();
+const getAllCategories = async (search) => {
+  return await CategoryRepo.getAllCategories(search);
+};
 
 const createCategory = async (data) => {
   if (!data.name) throw new Error("NAME_REQUIRED");
@@ -36,7 +38,13 @@ const syncMeasurementParams = async (cid, list) => {
   return await CategoryRepo.getMeasurementParams(cid);
 };
 
+const getSizesByCategoryId = async (id) => {
+  const existing = await CategoryRepo.getCategoryById(id);
+  if (!existing) throw new Error("CATEGORY_NOT_FOUND");
+  return await CategoryRepo.getSizesByCategoryId(id);
+};
+
 module.exports = {
   getAllCategories, createCategory, updateCategory, deleteCategory,
-  getMeasurementParams, syncMeasurementParams, getAllSizes
+  getMeasurementParams, syncMeasurementParams, getAllSizes, getSizesByCategoryId
 };
