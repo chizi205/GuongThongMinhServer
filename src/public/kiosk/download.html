@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tải Ảnh - IGF Kiosk</title>
+
+    <style>
+      * {
+        box-sizing: border-box;
+        font-family: Inter, Arial, sans-serif;
+      }
+
+      :root {
+        --bg: #f5f7ff;
+        --card: rgba(255, 255, 255, 0.92);
+        --text: #1f2937;
+        --muted: #6b7280;
+        --primary: #4f46e5;
+        --primary-hover: #4338ca;
+        --border: #e5e7eb;
+        --danger: #dc2626;
+        --shadow: 0 20px 60px rgba(79, 70, 229, 0.15);
+        --radius: 24px;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .card {
+        width: 100%;
+        max-width: 460px;
+        background: var(--card);
+        border-radius: var(--radius);
+        padding: 24px;
+        box-shadow: var(--shadow);
+      }
+
+      .title {
+        text-align: center;
+        font-size: 24px;
+        font-weight: 800;
+      }
+
+      .subtitle {
+        text-align: center;
+        font-size: 14px;
+        color: var(--muted);
+        margin-bottom: 16px;
+      }
+
+      .instruction-box {
+        background: rgba(79, 70, 229, 0.08);
+        border: 1px solid rgba(79, 70, 229, 0.2);
+        color: var(--primary);
+        padding: 12px;
+        border-radius: 12px;
+        text-align: center;
+        margin-bottom: 16px;
+      }
+
+      .download-all-btn {
+        width: 100%;
+        margin-bottom: 16px;
+        padding: 12px;
+        border: none;
+        border-radius: 12px;
+        background: var(--primary);
+        color: #fff;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .download-all-btn:hover {
+        background: var(--primary-hover);
+      }
+
+      .image-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .image-item img {
+        width: 100%;
+        border-radius: 12px;
+      }
+
+      .loading,
+      .error {
+        text-align: center;
+        padding: 20px;
+        font-weight: bold;
+      }
+
+      .error {
+        color: var(--danger);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="card">
+      <div class="title">Ảnh Của Bạn</div>
+      <div class="subtitle">Cảm ơn bạn đã sử dụng IGF Kiosk</div>
+
+      <div class="instruction-box">💡 Nhấn nút bên dưới để tải toàn bộ ảnh</div>
+
+      <button id="downloadAllBtn" class="download-all-btn">
+        ⬇️ Tải tất cả ảnh
+      </button>
+
+      <div id="imageContainer" class="image-list">
+        <div class="loading">Đang tải ảnh...</div>
+      </div>
+    </div>
+
+    <script>
+      let currentImages = [];
+
+      // =========================
+      // Render ảnh
+      // =========================
+      function renderImages(images) {
+        const container = document.getElementById("imageContainer");
+        container.innerHTML = "";
+
+        currentImages = images;
+
+        if (!images || images.length === 0) {
+          container.innerHTML = `<div class="error">Không có ảnh</div>`;
+          return;
+        }
+
+        images.forEach((url) => {
+          const div = document.createElement("div");
+          div.className = "image-item";
+
+          const img = document.createElement("img");
+          img.src = url;
+
+          div.appendChild(img);
+          container.appendChild(div);
+        });
+      }
+
+      // =========================
+      // Fetch API
+      // =========================
+      async function fetchAlbum() {
+        const container = document.getElementById("imageContainer");
+
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get("id");
+
+        if (!id) {
+          container.innerHTML = `<div class="error">QR không hợp lệ</div>`;
+          return;
+        }
+
+        try {
+          const res = await fetch(`/api/album/${id}`, {
+            headers: {
+              "ngrok-skip-browser-warning": "true",
+            },
+          });
+
+          const data = await res.json();
+
+          if (data.success) {
+            renderImages(data.data);
+          } else {
+            throw new Error(data.message);
+          }
+        } catch (err) {
+          container.innerHTML = `<div class="error">${err.message}</div>`;
+        }
+      }
+
+      // =========================
+      // Download all
+      // =========================
+      async function downloadAll() {
+        if (!currentImages.length) {
+          alert("Không có ảnh!");
+          return;
+        }
+
+        for (let i = 0; i < currentImages.length; i++) {
+          const url = currentImages[i];
+
+          try {
+            const res = await fetch(url);
+            const blob = await res.blob();
+
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = `image_${i + 1}.jpg`;
+            a.click();
+
+            await new Promise((r) => setTimeout(r, 300));
+          } catch (e) {
+            console.error("Lỗi tải ảnh:", e);
+          }
+        }
+      }
+
+      // =========================
+      // INIT
+      // =========================
+      window.addEventListener("DOMContentLoaded", () => {
+        fetchAlbum();
+
+        document
+          .getElementById("downloadAllBtn")
+          .addEventListener("click", downloadAll);
+      });
+    </script>
+  </body>
+</html>
